@@ -1,0 +1,43 @@
+/* Light mode */
+:root {
+    --body-bg: #FFFFFF;
+    --body-color: #000000;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --body-bg: #000000;
+        --body-color: rgb(200, 200, 200);
+    }
+}
+
+body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: var(--body-bg);
+    color: var(--body-color);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    font-family: serif;
+}
+
+section {
+    width: 400px;
+    margin: 0 auto;
+}
+
+.waiting {
+    background-color: green;
+}
+
+table {
+    padding: 5px 0;
+}
+
+th, td {
+    border: 1px solid white;
+    padding: 5px;
+}

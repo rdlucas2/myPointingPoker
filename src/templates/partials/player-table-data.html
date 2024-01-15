@@ -1,0 +1,26 @@
+<table>
+    <tr>
+        <th>Player</th>
+        <th>Points</th>
+        <th>Observer</th>
+        <th>Remove</th>
+    </tr>
+    {{ range .Players }}
+    <tr>
+        <td>{{ .Name }}</td>
+        <td class='{{if ne .Points ""}}waiting{{end}}'><span class="toggle-column" style="display:none;">{{ .Points
+                }}</span></td>
+        <td>
+            <input type="checkbox" {{if .Observer}}checked="checked"{{end}} data-player-id="{{ .Id }}" hx-post="/observer" hx-vals='{"playerId": "{{ .Id }}"}' hx-trigger="change">
+        </td>
+        <td>
+            <button type="button" hx-post="/remove" hx-vals='{"playerId": "{{ .Id }}"}' hx-trigger="click">X</button>
+        </td>
+    </tr>
+    {{ end }}
+</table>
+<script>
+    var cells = document.querySelectorAll('.toggle-column');
+    cells.forEach(function (cell) {
+        cell.style.display = {{ .Visible }} ? '' : 'none';});
+</script>

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Pointing Poker | {{ .BasePageData.Title }}</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="{{ .BasePageData.Description }}" />
+  <link rel="icon" href="/static/favicon.ico">
+  <script src="/static/htmx.1.9.9.min.js"></script>
+  <link rel="stylesheet" type="text/css" href="/static/theme.css" />
+</head>
+
+<body>
+  <section>
+    <h1>{{ .BasePageData.Header }}</h1>
+
+    <form hx-post="/player" hx-target="#hidden" hx-swap="innerHTML">
+      <p>Please provide your:</p>
+      <label>Name <input type="text" name="name"></label>
+      <button type="submit">Start Pointing!</button>
+      <div style="display:none" id="hidden"></div>
+    </form>
+  </section>
+
+</body>
+
+</html>

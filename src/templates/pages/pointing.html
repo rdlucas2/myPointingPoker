@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Pointing Poker | {{ .BasePageData.Title }}</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="{{ .BasePageData.Description }}" />
+  <link rel="icon" href="/static/favicon.ico">
+  <script src="/static/htmx.1.9.9.min.js"></script>
+  <link rel="stylesheet" type="text/css" href="/static/theme.css" />
+</head>
+
+<body>
+  <section hx-sse="connect:/pointing-events">
+    <div hx-trigger="sse:update_player, load" hx-get="/player" hx-target="#player" hx-swap="innerHTML">
+      <h1>{{ .BasePageData.Header }}</h1>
+      <p>Welcome to the pointing poker app, <span id="player"></span>!</p>
+    </div>
+
+    <div>
+      <textarea name="title" hx-post="/story" hx-trigger="input" hx-target="#story"></textarea>
+
+      <div>Timer: <span id="timer-display">??:??:??</span></div>
+      <button hx-post="/reset-timer" hx-trigger="click" hx-swap="none">Reset Timer</button>
+
+      <h2 hx-trigger="sse:update_story, load" hx-get="/story" hx-target="#story" hx-swap="innerHTML">Story: <span
+          id="story"></span></h2>
+    </div>
+
+    <div>
+      <table>
+        <tr>
+          <td>
+            <button type="button" hx-post="/points" hx-vals='{"points": "0"}' hx-trigger="click"
+              hx-swap="none">0</button>
+          </td>
+          <td>
+            <button type="button" hx-post="/points" hx-vals='{"points": "1/2"}' hx-trigger="click"
+              hx-swap="none">1/2</button>
+          </td>
+          <td>
+            <button type="button" hx-post="/points" hx-vals='{"points": "1"}' hx-trigger="click"
+              hx-swap="none">1</button>
+          </td>
+          <td>
+            <button type="button" hx-post="/points" hx-vals='{"points": "2"}' hx-trigger="click"
+              hx-swap="none">2</button>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <button type="button" hx-post="/points" hx-vals='{"points": "3"}' hx-trigger="click"
+              hx-swap="none">3</button>
+          </td>
+          <td>
+            <button type="button" hx-post="/points" hx-vals='{"points": "5"}' hx-trigger="click"
+              hx-swap="none">5</button>
+          </td>
+          <td>
+            <button type="button" hx-post="/points" hx-vals='{"points": "8"}' hx-trigger="click"
+              hx-swap="none">8</button>
+          </td>
+          <td>
+            <button type="button" hx-post="/points" hx-vals='{"points": "13"}' hx-trigger="click"
+              hx-swap="none">13</button>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <button type="button" hx-post="/points" hx-vals='{"points": "20"}' hx-trigger="click"
+              hx-swap="none">20</button>
+          </td>
+          <td>
+            <button type="button" hx-post="/points" hx-vals='{"points": "40"}' hx-trigger="click"
+              hx-swap="none">40</button>
+          </td>
+          <td>
+            <button type="button" hx-post="/points" hx-vals='{"points": "100"}' hx-trigger="click"
+              hx-swap="none">100</button>
+          </td>
+          <td>
+            <button type="button" hx-post="/points" hx-vals='{"points": "?"}' hx-trigger="click"
+              hx-swap="none">?</button>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div>
+      <button type="button" hx-post="/clear" hx-trigger="click" hx-swap="none">Clear</button>
+      <button hx-post="/visibility" hx-trigger="click" hx-swap="none">Show/Hide</button>
+      <div id="players" hx-trigger="sse:update_players, load" hx-get="/players" hx-target="#players"
+        hx-swap="innerHTML">
+      </div>
+    </div>
+  </section>
+  <script>
+    var evtSource = new EventSource("/pointing-events");
+
+    function togglePointsColumn(visible) {
+      var cells = document.querySelectorAll('.toggle-column');
+      cells.forEach(function (cell) {
+        cell.style.display = visible ? '' : 'none';
+      });
+    }
+
+    evtSource.addEventListener("update_visibility", function (event) {
+      var data = JSON.parse(event.data);
+      togglePointsColumn(data.visible);
+    });
+
+    evtSource.addEventListener("update_observer", function (event) {
+      var data = JSON.parse(event.data);
+      var playerId = data.playerId;
+      var checkbox = document.querySelector('input[type="checkbox"][data-player-id="' + playerId + '"]');
+      if (checkbox) {
+        // Toggle checkbox or update based on the message
+      }
+    });
+
+    evtSource.addEventListener("update_remove", function (event) {
+      var data = JSON.parse(event.data);
+      var playerId = data.playerId;
+    });
+
+    evtSource.addEventListener("update_timer", function (event) {
+      document.getElementById("timer-display").innerText = event.data;
+    });
+
+  </script>
+</body>
+
+</html>
