@@ -57,6 +57,7 @@ override.tf.json
 terraform.rc
 .terraform/
 .terraform.lock.hcl
+.infracost/
 
 # Custom
 secrets.txt
