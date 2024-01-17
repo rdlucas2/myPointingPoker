@@ -35,8 +35,20 @@ docker run -it --rm -p 8080:8080 --name mypointingpoker mypointingpoker:latest
 docker run -it --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$(pwd)/out:/out" aquasec/trivy image --format table --output /out/trivy-report.txt --scanners vuln mypointingpoker:latest
 ```
 
+### deploy to AWS
+```
+cd terraform
+#configure aws credentials
+terraform init
+terraform plan
+terraform apply
+```
+
 ### TODO:
 - listen for client disconnect and remove user from db
 - write unit tests, fix sonarqube issues
 - add volume mounts for docker run commands and parameterize db file from env var
 - improve CSS
+- terraform for deploying to ECS with fargate spot instances
+- try out infracost: https://www.infracost.io/docs/
+- add checkov to terraform / output to sonarqube as well
