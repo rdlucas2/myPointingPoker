@@ -59,6 +59,7 @@ infracost breakdown --path .
 - listen for client disconnect and remove user from db
 - write unit tests, fix sonarqube issues
 - add volume mounts for docker run commands and parameterize db file from env var
+- fix db/ui oddness when not deployed locally, not refreshing all the time properly
 - improve CSS
-- terraform for deploying to ECS with fargate spot instances
 - add checkov to terraform / output to sonarqube as well
+- refactor db so it's coming from single source... dynamodb? postgres? is there a way to continue using sqlite across multiple instances?
