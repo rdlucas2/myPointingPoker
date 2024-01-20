@@ -30,7 +30,7 @@ RUN rm -f /sbin/apk && \
 COPY --from=base /app/myapp /home/nonroot/gohtmx
 COPY --from=base /app/src/templates /home/nonroot/templates
 COPY --from=base /app/src/static /home/nonroot/static
-EXPOSE 3000
+EXPOSE 8080
 RUN addgroup --system nonroot && \
     adduser --system --ingroup nonroot nonroot
 # Set the home directory for the nonroot user

@@ -1,32 +1,32 @@
 terraform {
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
       version = "4.45.0"
     }
   }
 }
 
 provider "aws" {
-  region  = "us-east-2" #The region where the environment 
+  region = var.aws_region #"us-east-2" #The region where the environment 
 }
 
 resource "aws_ecs_cluster" "my_cluster" {
-  name = "app-cluster" # Name your cluster here
+  name = "${var.app_name}-cluster" #"app-cluster" # Name your cluster here
 }
 
 resource "aws_ecs_task_definition" "app_task" {
-  family                   = "app-first-task" # Name your task
+  family                   = "${var.app_name}-task" # Name your task
   container_definitions    = <<DEFINITION
   [
     {
-      "name": "app-first-task",
-      "image": "rdlucas2/pointingpoker:latest",
+      "name": "${var.app_name}-task",
+      "image": "${var.image_name}",
       "essential": true,
       "portMappings": [
         {
-          "containerPort": 8080,
-          "hostPort": 8080
+          "containerPort": ${var.container_port},
+          "hostPort": ${var.container_port}
         }
       ],
       "memory": 512,
@@ -36,9 +36,9 @@ resource "aws_ecs_task_definition" "app_task" {
   DEFINITION
   requires_compatibilities = ["FARGATE"] # use Fargate as the launch type
   network_mode             = "awsvpc"    # add the AWS VPN network mode as this is required for Fargate
-  memory                   = 512         # Specify the memory the container requires
-  cpu                      = 256         # Specify the CPU the container requires
-  execution_role_arn       = "${data.aws_iam_role.ecsTaskExecutionRole.arn}"
+  memory                   = var.memory  #512         # Specify the memory the container requires
+  cpu                      = var.cpu     #256         # Specify the CPU the container requires
+  execution_role_arn       = data.aws_iam_role.ecsTaskExecutionRole.arn
 }
 
 # resource "aws_iam_role" "ecsTaskExecutionRole" {
@@ -62,7 +62,7 @@ data "aws_iam_policy_document" "assume_role_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "ecsTaskExecutionRole_policy" {
-  role       = "${data.aws_iam_role.ecsTaskExecutionRole.name}"
+  role       = data.aws_iam_role.ecsTaskExecutionRole.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
@@ -81,21 +81,9 @@ resource "aws_iam_role_policy_attachment" "ecsTaskExecutionRole_policy" {
 #   availability_zone = "us-east-1b"
 # }
 
-data "aws_vpc" "default_vpc" {
-  default = true
-  #id = "vpc-00d5f93201daa4f25"
-} 
-
-data "aws_subnet" "default_subnet_a" {
-    id = "subnet-00cc008097b50a86a"
-}
-
-data "aws_subnet" "default_subnet_b" {
-    id = "subnet-0f9540cbdf49b8f9a"
-}
 
 resource "aws_alb" "application_load_balancer" {
-  name               = "rl-pointing-poker" #load balancer name
+  name               = "${var.app_name}-lb" #load balancer name
   load_balancer_type = "application"
   subnets = [
     "${data.aws_subnet.default_subnet_a.id}",
@@ -121,42 +109,42 @@ resource "aws_security_group" "load_balancer_security_group" {
 }
 
 resource "aws_lb_target_group" "target_group" {
-  name        = "target-group"
+  name        = "${var.app_name}-target-group"
   port        = 80
   protocol    = "HTTP"
   target_type = "ip"
-  vpc_id      = "${data.aws_vpc.default_vpc.id}" # default VPC
+  vpc_id      = data.aws_vpc.default_vpc.id # default VPC
 }
 
 resource "aws_lb_listener" "listener" {
-  load_balancer_arn = "${aws_alb.application_load_balancer.arn}" #  load balancer
+  load_balancer_arn = aws_alb.application_load_balancer.arn #  load balancer
   port              = "80"
   protocol          = "HTTP"
   default_action {
     type             = "forward"
-    target_group_arn = "${aws_lb_target_group.target_group.arn}" # target group
+    target_group_arn = aws_lb_target_group.target_group.arn # target group
   }
 }
 
 resource "aws_ecs_service" "app_service" {
-  name            = "app-first-service"     # Name the service
-  cluster         = "${aws_ecs_cluster.my_cluster.id}"   # Reference the created Cluster
-  task_definition = "${aws_ecs_task_definition.app_task.arn}" # Reference the task that the service will spin up
+  name            = "${var.app_name}-service"            # Name the service
+  cluster         = aws_ecs_cluster.my_cluster.id        # Reference the created Cluster
+  task_definition = aws_ecs_task_definition.app_task.arn # Reference the task that the service will spin up
   launch_type     = "FARGATE"
-  desired_count   = 1 # Set up the number of containers to 3
+  desired_count   = 1 # Set up the number of containers to 2 or 3 for HA... we're using 1 for now because of the sqlite db
 
   load_balancer {
-    target_group_arn = "${aws_lb_target_group.target_group.arn}" # Reference the target group
-    container_name   = "${aws_ecs_task_definition.app_task.family}"
-    container_port   = 8080 # Specify the container port
+    target_group_arn = aws_lb_target_group.target_group.arn # Reference the target group
+    container_name   = aws_ecs_task_definition.app_task.family
+    container_port   = var.container_port # Specify the container port
   }
 
   network_configuration {
-    subnets          = [
+    subnets = [
       "${data.aws_subnet.default_subnet_a.id}",
       "${data.aws_subnet.default_subnet_b.id}"
     ]
-    assign_public_ip = true     # Provide the containers with public IPs
+    assign_public_ip = true                                                # Provide the containers with public IPs
     security_groups  = ["${aws_security_group.service_security_group.id}"] # Set up the security group
   }
 }
