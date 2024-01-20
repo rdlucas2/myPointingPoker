@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 )
@@ -13,7 +14,12 @@ var (
 func sendSSEStoryUpdate(story Story) {
 	sseMutex.Lock()
 	defer sseMutex.Unlock()
-	msg := SSEMessage{Type: "update_story", Content: "story updated"}
+	s, err := json.Marshal(story)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	msg := SSEMessage{Type: "update_story", Content: string(s)}
 	for clientChan := range sseClients {
 		select {
 		case clientChan <- msg:
@@ -25,7 +31,12 @@ func sendSSEStoryUpdate(story Story) {
 func sendSSEPlayersUpdate(players []Player) {
 	sseMutex.Lock()
 	defer sseMutex.Unlock()
-	msg := SSEMessage{Type: "update_players", Content: "players updated"}
+	p, err := json.Marshal(players)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	msg := SSEMessage{Type: "update_players", Content: string(p)}
 	for clientChan := range sseClients {
 		select {
 		case clientChan <- msg:
@@ -37,7 +48,12 @@ func sendSSEPlayersUpdate(players []Player) {
 func sendSSEPlayerUpdate(player Player) {
 	sseMutex.Lock()
 	defer sseMutex.Unlock()
-	msg := SSEMessage{Type: "update_players", Content: "player updated"}
+	p, err := json.Marshal(player)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	msg := SSEMessage{Type: "update_players", Content: string(p)}
 	for clientChan := range sseClients {
 		select {
 		case clientChan <- msg:

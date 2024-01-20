@@ -277,10 +277,10 @@ func clearHandler(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 			return
 		}
-		resetTimer()
 		pointsColumnVisible = false
-		sendSSEPlayersUpdate(players)
 		sendSSEVisibilityUpdate()
+		go sendSSEPlayersUpdate(players)
+		resetTimer()
 		w.WriteHeader(http.StatusOK)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
