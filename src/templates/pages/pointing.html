@@ -16,6 +16,7 @@
     <div hx-trigger="sse:update_player, load" hx-get="/player" hx-target="#player" hx-swap="innerHTML">
       <h1>{{ .BasePageData.Header }}</h1>
       <p>Welcome to the pointing poker app, <span id="player"></span>!</p>
+      <p>Room: <strong>{{ .RoomID }}</strong></p>
     </div>
 
     <div>

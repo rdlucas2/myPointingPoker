@@ -12,12 +12,13 @@ import (
 var (
 	storyMutex  sync.Mutex
 	playerMutex sync.Mutex
+	roomMutex   sync.Mutex
 )
 
 func initDB(isLocal bool) {
 	var err error
 	if isLocal {
-		db, err = sql.Open("sqlite3", ":memory:") // Use in-memory database for testing
+		db, err = sql.Open("sqlite3", ":memory:")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -28,12 +29,18 @@ func initDB(isLocal bool) {
 		}
 	}
 
-	createStoriesTable := `
-    CREATE TABLE IF NOT EXISTS stories (
-        id INTEGER PRIMARY KEY,
-        title TEXT
+	// Enable foreign keys
+	_, err = db.Exec("PRAGMA foreign_keys = ON")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	createRoomsTable := `
+    CREATE TABLE IF NOT EXISTS rooms (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_id TEXT UNIQUE NOT NULL
     );`
-	_, err = db.Exec(createStoriesTable)
+	_, err = db.Exec(createRoomsTable)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -41,72 +48,71 @@ func initDB(isLocal bool) {
 	createPlayersTable := `
     CREATE TABLE IF NOT EXISTS players (
         id TEXT PRIMARY KEY,
-		name TEXT UNIQUE,
-		points TEXT,
-		observer BOOLEAN
+        name TEXT,
+        points TEXT,
+        observer BOOLEAN
     );`
 	_, err = db.Exec(createPlayersTable)
 	if err != nil {
 		log.Fatal(err)
 	}
-}
 
-func upsertStory(title string) error {
-	storyMutex.Lock()
-	defer storyMutex.Unlock()
-	// Assuming 'id' is the primary key and always has the same value like 1 for your single story
-	_, err := db.Exec("INSERT INTO stories (id, title) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET title = excluded.title", title)
+	createRoomPlayersTable := `
+    CREATE TABLE IF NOT EXISTS room_players (
+        room_id TEXT NOT NULL,
+        player_id TEXT NOT NULL,
+        PRIMARY KEY (room_id, player_id),
+        FOREIGN KEY (room_id) REFERENCES rooms(room_id) ON DELETE CASCADE,
+        FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+    );`
+	_, err = db.Exec(createRoomPlayersTable)
 	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func upsertPlayer(id string, name string, points string, observer bool) error {
-	playerMutex.Lock()
-	defer playerMutex.Unlock()
-	_, err := db.Exec("INSERT INTO players (id, name, points, observer) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, points = excluded.points, observer = excluded.observer", id, name, points, observer)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func getStory() Story {
-	var story Story
-	row := db.QueryRow("SELECT title FROM stories ORDER BY id DESC LIMIT 1")
-	err := row.Scan(&story.Title)
-	if err != nil {
-		return story
-	}
-	return story
-}
-
-func getPlayerById(id string) (Player, error) {
-	var player Player
-
-	// Query the database for the player with the given id
-	row := db.QueryRow("SELECT id, name, points, observer FROM players WHERE id = ?", id)
-
-	// Scan the result into the Player struct
-	err := row.Scan(&player.Id, &player.Name, &player.Points, &player.Observer)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			// No rows were returned - player with the given id does not exist
-			return player, fmt.Errorf("no player found with id: %s", id)
-		}
-		// Some other error occurred during the query
-		return player, err
+		log.Fatal(err)
 	}
 
-	return player, nil
+	createStoriesTable := `
+    CREATE TABLE IF NOT EXISTS stories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_id TEXT UNIQUE NOT NULL,
+        title TEXT,
+        FOREIGN KEY (room_id) REFERENCES rooms(room_id) ON DELETE CASCADE
+    );`
+	_, err = db.Exec(createStoriesTable)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
-func getPlayers() ([]Player, error) {
-	// Slice to hold the players
+// Room functions
+
+func ensureRoom(roomID string) error {
+	roomMutex.Lock()
+	defer roomMutex.Unlock()
+	_, err := db.Exec("INSERT OR IGNORE INTO rooms (room_id) VALUES (?)", roomID)
+	return err
+}
+
+func addPlayerToRoom(roomID string, playerID string) error {
+	roomMutex.Lock()
+	defer roomMutex.Unlock()
+	_, err := db.Exec("INSERT OR IGNORE INTO room_players (room_id, player_id) VALUES (?, ?)", roomID, playerID)
+	return err
+}
+
+func removePlayerFromRoom(roomID string, playerID string) error {
+	roomMutex.Lock()
+	defer roomMutex.Unlock()
+	_, err := db.Exec("DELETE FROM room_players WHERE room_id = ? AND player_id = ?", roomID, playerID)
+	return err
+}
+
+func getPlayersByRoom(roomID string) ([]Player, error) {
 	var players []Player
-
-	rows, err := db.Query("SELECT id, name, points, observer FROM players")
+	rows, err := db.Query(`
+		SELECT p.id, p.name, p.points, p.observer
+		FROM players p
+		INNER JOIN room_players rp ON p.id = rp.player_id
+		WHERE rp.room_id = ?`, roomID)
 	if err != nil {
 		return nil, err
 	}
@@ -123,21 +129,68 @@ func getPlayers() ([]Player, error) {
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
-
 	return players, nil
 }
 
-func clearPlayersPoints() {
-	if _, err := db.Exec("UPDATE players SET points = ''"); err != nil {
-		log.Printf("Error clearing player points: %v", err)
-		return
+// Story functions (room-scoped)
+
+func upsertStory(roomID string, title string) error {
+	storyMutex.Lock()
+	defer storyMutex.Unlock()
+	_, err := db.Exec(`
+		INSERT INTO stories (room_id, title) VALUES (?, ?)
+		ON CONFLICT(room_id) DO UPDATE SET title = excluded.title`, roomID, title)
+	// If no unique constraint on room_id yet, we need one
+	return err
+}
+
+func getStoryByRoom(roomID string) Story {
+	var story Story
+	row := db.QueryRow("SELECT COALESCE(title, '') FROM stories WHERE room_id = ?", roomID)
+	err := row.Scan(&story.Title)
+	if err != nil {
+		return story
+	}
+	story.RoomID = roomID
+	return story
+}
+
+func clearStoryByRoom(roomID string) {
+	if _, err := db.Exec("UPDATE stories SET title = '' WHERE room_id = ?", roomID); err != nil {
+		log.Printf("Error clearing story title: %v", err)
 	}
 }
 
-func clearStory() {
-	if _, err := db.Exec("UPDATE stories SET title = ''"); err != nil {
-		log.Printf("Error clearing story title: %v", err)
-		return
+// Player functions
+
+func upsertPlayer(id string, name string, points string, observer bool) error {
+	playerMutex.Lock()
+	defer playerMutex.Unlock()
+	_, err := db.Exec("INSERT INTO players (id, name, points, observer) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, points = excluded.points, observer = excluded.observer", id, name, points, observer)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func getPlayerById(id string) (Player, error) {
+	var player Player
+	row := db.QueryRow("SELECT id, name, points, observer FROM players WHERE id = ?", id)
+	err := row.Scan(&player.Id, &player.Name, &player.Points, &player.Observer)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return player, fmt.Errorf("no player found with id: %s", id)
+		}
+		return player, err
+	}
+	return player, nil
+}
+
+func clearPlayersPointsByRoom(roomID string) {
+	if _, err := db.Exec(`
+		UPDATE players SET points = ''
+		WHERE id IN (SELECT player_id FROM room_players WHERE room_id = ?)`, roomID); err != nil {
+		log.Printf("Error clearing player points: %v", err)
 	}
 }
 
@@ -149,10 +202,10 @@ func deletePlayer(id string) error {
 	return nil
 }
 
-func allPlayersHavePoints() (bool, error) {
-	players, playersErr := getPlayers()
-	if playersErr != nil {
-		return false, playersErr
+func allPlayersInRoomHavePoints(roomID string) (bool, error) {
+	players, err := getPlayersByRoom(roomID)
+	if err != nil {
+		return false, err
 	}
 	var nonobservers []Player
 	for _, player := range players {
@@ -166,4 +219,26 @@ func allPlayersHavePoints() (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+func isNameTakenInRoom(roomID string, name string, excludePlayerID string) (bool, error) {
+	var count int
+	err := db.QueryRow(`
+		SELECT COUNT(*) FROM players p
+		INNER JOIN room_players rp ON p.id = rp.player_id
+		WHERE rp.room_id = ? AND p.name = ? AND p.id != ?`, roomID, name, excludePlayerID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func getRoomForPlayer(playerID string) (string, error) {
+	var roomID string
+	row := db.QueryRow("SELECT room_id FROM room_players WHERE player_id = ? LIMIT 1", playerID)
+	err := row.Scan(&roomID)
+	if err != nil {
+		return "", fmt.Errorf("no room found for player: %s", playerID)
+	}
+	return roomID, nil
 }

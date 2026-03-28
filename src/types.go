@@ -13,11 +13,13 @@ type IndexPageData struct {
 type PointingPageData struct {
 	BasePageData  BasePageData
 	CurrentPlayer string
+	RoomID        string
 }
 
 type Story struct {
-	Id    int
-	Title string
+	Id     int
+	Title  string
+	RoomID string
 }
 
 type Player struct {
@@ -30,6 +32,7 @@ type Player struct {
 type PlayersTablePartial struct {
 	Players []Player
 	Visible bool
+	RoomID  string
 }
 
 type PlayerPartial struct {
