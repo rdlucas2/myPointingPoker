@@ -2,31 +2,52 @@ package main
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
+type roomTimer struct {
+	startTime time.Time
+	running   bool
+}
+
 var (
-	startTime    time.Time
-	timerRunning bool
+	roomTimers    = make(map[string]*roomTimer)
+	roomTimersMux sync.Mutex
 )
 
-func resetTimer() {
-	startTime = time.Now()
-	if !timerRunning {
-		startTimer()
+func resetTimer(roomID string) {
+	roomTimersMux.Lock()
+	rt, exists := roomTimers[roomID]
+	if !exists {
+		rt = &roomTimer{}
+		roomTimers[roomID] = rt
+	}
+	rt.startTime = time.Now()
+	wasRunning := rt.running
+	rt.running = true
+	roomTimersMux.Unlock()
+
+	if !wasRunning {
+		go startRoomTimer(roomID)
 	}
 }
 
-func startTimer() {
-	timerRunning = true
-	go func() {
-		for timerRunning {
-			elapsedTime := time.Since(startTime)
-			formattedTime := formatDurationAsHHMMSS(elapsedTime)
-			sendSSETimeUpdate(formattedTime)
-			time.Sleep(1 * time.Second)
+func startRoomTimer(roomID string) {
+	for {
+		roomTimersMux.Lock()
+		rt, exists := roomTimers[roomID]
+		if !exists || !rt.running {
+			roomTimersMux.Unlock()
+			return
 		}
-	}()
+		elapsed := time.Since(rt.startTime)
+		roomTimersMux.Unlock()
+
+		formattedTime := formatDurationAsHHMMSS(elapsed)
+		sendSSETimeUpdate(roomID, formattedTime)
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func formatDurationAsHHMMSS(d time.Duration) string {

@@ -17,7 +17,8 @@
 
     <form hx-post="/player" hx-target="#hidden" hx-swap="innerHTML">
       <p>Please provide your:</p>
-      <label>Name <input type="text" name="name"></label>
+      <label>Name <input type="text" name="name" required></label>
+      <label>Room ID <input type="text" name="room" required></label>
       <button type="submit">Start Pointing!</button>
       <div style="display:none" id="hidden"></div>
     </form>

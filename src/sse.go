@@ -6,83 +6,79 @@ import (
 	"sync"
 )
 
+// Room-scoped SSE clients: roomID -> set of client channels
 var (
-	sseClients = make(map[chan SSEMessage]struct{})
-	sseMutex   sync.Mutex
+	sseRoomClients = make(map[string]map[chan SSEMessage]struct{})
+	sseMutex       sync.Mutex
 )
 
-func sendSSEStoryUpdate(story Story) {
+func addSSEClient(roomID string, clientChan chan SSEMessage) {
 	sseMutex.Lock()
 	defer sseMutex.Unlock()
+	if sseRoomClients[roomID] == nil {
+		sseRoomClients[roomID] = make(map[chan SSEMessage]struct{})
+	}
+	sseRoomClients[roomID][clientChan] = struct{}{}
+}
+
+func removeSSEClient(roomID string, clientChan chan SSEMessage) {
+	sseMutex.Lock()
+	defer sseMutex.Unlock()
+	if clients, ok := sseRoomClients[roomID]; ok {
+		delete(clients, clientChan)
+		if len(clients) == 0 {
+			delete(sseRoomClients, roomID)
+		}
+	}
+}
+
+func broadcastToRoom(roomID string, msg SSEMessage) {
+	sseMutex.Lock()
+	defer sseMutex.Unlock()
+	clients, ok := sseRoomClients[roomID]
+	if !ok {
+		return
+	}
+	for clientChan := range clients {
+		select {
+		case clientChan <- msg:
+		default:
+		}
+	}
+}
+
+func sendSSEStoryUpdate(roomID string, story Story) {
 	s, err := json.Marshal(story)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	msg := SSEMessage{Type: "update_story", Content: string(s)}
-	for clientChan := range sseClients {
-		select {
-		case clientChan <- msg:
-		default:
-		}
-	}
+	broadcastToRoom(roomID, SSEMessage{Type: "update_story", Content: string(s)})
 }
 
-func sendSSEPlayersUpdate(players []Player) {
-	sseMutex.Lock()
-	defer sseMutex.Unlock()
+func sendSSEPlayersUpdate(roomID string, players []Player) {
 	p, err := json.Marshal(players)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	msg := SSEMessage{Type: "update_players", Content: string(p)}
-	for clientChan := range sseClients {
-		select {
-		case clientChan <- msg:
-		default:
-		}
-	}
+	broadcastToRoom(roomID, SSEMessage{Type: "update_players", Content: string(p)})
 }
 
-func sendSSEPlayerUpdate(player Player) {
-	sseMutex.Lock()
-	defer sseMutex.Unlock()
+func sendSSEPlayerUpdate(roomID string, player Player) {
 	p, err := json.Marshal(player)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	msg := SSEMessage{Type: "update_players", Content: string(p)}
-	for clientChan := range sseClients {
-		select {
-		case clientChan <- msg:
-		default:
-		}
-	}
+	broadcastToRoom(roomID, SSEMessage{Type: "update_players", Content: string(p)})
 }
 
-func sendSSEVisibilityUpdate() {
-	sseMutex.Lock()
-	defer sseMutex.Unlock()
-	visibilityJson := fmt.Sprintf("{\"visible\": %t}", pointsColumnVisible)
-	msg := SSEMessage{Type: "update_visibility", Content: visibilityJson}
-	for clientChan := range sseClients {
-		select {
-		case clientChan <- msg:
-		default:
-		}
-	}
+func sendSSEVisibilityUpdate(roomID string, visible bool) {
+	visibilityJson := fmt.Sprintf("{\"visible\": %t}", visible)
+	broadcastToRoom(roomID, SSEMessage{Type: "update_visibility", Content: visibilityJson})
 }
 
-func sendSSETimeUpdate(formattedTimer string) {
-	sseMutex.Lock()
-	defer sseMutex.Unlock()
-	msg := SSEMessage{Type: "update_timer", Content: formattedTimer}
-	for clientChan := range sseClients {
-		select {
-		case clientChan <- msg:
-		default:
-		}
-	}
+func sendSSETimeUpdate(roomID string, formattedTimer string) {
+	broadcastToRoom(roomID, SSEMessage{Type: "update_timer", Content: formattedTimer})
 }
